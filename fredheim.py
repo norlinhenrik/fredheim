@@ -26,9 +26,13 @@ def partner_test():
     for record in records:
         print(record["name"])
 
-def accounting_test():
+def print_line(line):
+    output = "{}, {}, {}, {}, {}, {}, {}".format(line["date"], line["account_id"], line["analytic_account_id"], line["partner_id"], line["credit"], line["amount_currency"], line["currency_id"])
+    print(output)
 
-    records = models.execute_kw(db, uid, password,
+def get_donations(print_output):
+
+    lines = models.execute_kw(db, uid, password,
         'account.move.line', 'search_read',
         [[
             ['date', '>=', datetime.datetime(2020, 1, 1)], 
@@ -37,14 +41,39 @@ def accounting_test():
             ['move_id.state', '=', 'posted']
         ]],
         {
-            # 'limit': 5,
+            'limit': 2,
         },
     )
+    if print_output:
+        for line in lines:
+            print_line(line)
+        print(len(lines))
+    return lines
 
-    for record in records:
-        output = "{}, {}, {}, {}, {}, {}, {}".format(record["date"], record["account_id"][1], record["analytic_account_id"], record["partner_id"], record["credit"], record["amount_currency"], record["currency_id"])
+def get_donation_payments(donations):
+    payment_account_ids = models.execute_kw(db, uid, password,
+        'account.account', 'search',
+        [[
+            ['user_type_id', '=', 20], # bank & cash
+        ]])
+    # print(payment_account_ids)
+
+    move_ids = [d['move_id'][0] for d in donations]
+    print(len(move_ids))
+    move_ids = list(set(move_ids)) # remove duplicates
+    print(len(move_ids))
+    moves = models.execute_kw(db, uid, password, 'account.move', 'read', [move_ids])
+    for move in moves:
+        output = "account.move: \n{}, {}, {}, lines: {}".format(move["date"], move["id"], move["name"], move["line_ids"])
         print(output)
-    print(len(records))
+        lines = models.execute_kw(db, uid, password, 'account.move.line', 'read', [move["line_ids"]])
+        for line in lines:
+            if line['account_id'][0] in payment_account_ids: # bank & cash etc.
+                print('payment')
+                print_line(line)
+            if line['account_id'][0] == 3983: # 3950 Gift Income
+                print('donation')
+                print_line(line)
 
 def fields_test():
 
@@ -63,6 +92,7 @@ def fields_test():
 # res.currency
 
 
-accounting_test()
-fields_test()
-partner_test()
+donations = get_donations(print_output=False)
+get_donation_payments(donations)
+# fields_test()
+# partner_test()
